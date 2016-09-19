@@ -1,6 +1,6 @@
 /*
- * validate.js 1.4.1
- * Copyright (c) 2011 - 2014 Rick Harrison, http://rickharrison.me
+ * validate.js 2.0.1
+ * Copyright (c) 2011 - 2015 Rick Harrison, http://rickharrison.me
  * validate.js is open sourced under the MIT license.
  * Portions of validate.js are inspired by CodeIgniter.
  * http://rickharrison.github.com/validate.js
@@ -95,6 +95,9 @@
 
             // If passed in incorrectly, we need to skip the field.
             if ((!field.name && !field.names) || !field.rules) {
+                console.warn('validate.js: The following field is being skipped due to a misconfiguration:');
+                console.warn(field);
+                console.warn('Check to ensure you have properly configured a name and rules for this field');
                 continue;
             }
 
@@ -149,6 +152,48 @@
 
     FormValidator.prototype.setMessage = function(rule, message) {
         this.messages[rule] = message;
+
+        // return this for chaining
+        return this;
+    };
+    
+    /*
+     * @public
+     *
+     * @param fields - Array - [{
+     *     name: The name of the element (i.e. <input name="myField" />)
+     *     display: 'Field Name'
+     *     rules: required|matches[password_confirm]
+     * }]
+     * Sets new custom validation rules set
+     */
+
+    FormValidator.prototype.setRules = function(fields) {
+        this.fields = {};
+        
+        for (var i = 0, fieldLength = fields.length; i < fieldLength; i++) {
+            var field = fields[i];
+
+            // If passed in incorrectly, we need to skip the field.
+            if ((!field.name && !field.names) || !field.rules) {
+                console.warn('validate.js: The following field is being skipped due to a misconfiguration:');
+                console.warn(field);
+                console.warn('Check to ensure you have properly configured a name and rules for this field');
+                continue;
+            }
+
+            /*
+             * Build the master fields array that has all the information needed to validate
+             */
+
+            if (field.names) {
+                for (var j = 0, fieldNamesLength = field.names.length; j < fieldNamesLength; j++) {
+                    this._addField(field, field.names[j]);
+                }
+            } else {
+                this._addField(field, field.name);
+            }
+        }
 
         // return this for chaining
         return this;
@@ -273,7 +318,8 @@
      */
 
     FormValidator.prototype._validateField = function(field) {
-        var rules = field.rules.split('|'),
+        var i, j,
+            rules = field.rules.split('|'),
             indexOfRequired = field.rules.indexOf('required'),
             isEmpty = (!field.value || field.value === '' || field.value === undefined);
 
@@ -281,7 +327,7 @@
          * Run through the rules and execute the validation methods as needed
          */
 
-        for (var i = 0, ruleLength = rules.length; i < ruleLength; i++) {
+        for (i = 0, ruleLength = rules.length; i < ruleLength; i++) {
             var method = rules[i],
                 param = null,
                 failed = false,
@@ -345,16 +391,24 @@
                     }
                 }
 
-                this.errors.push({
+                var existingError;
+                for (j = 0; j < this.errors.length; j += 1) {
+                    if (field.id === this.errors[j].id) {
+                        existingError = this.errors[j];
+                    }
+                }
+
+                var errorObject = existingError || {
                     id: field.id,
+                    display: field.display,
                     element: field.element,
                     name: field.name,
                     message: message,
+                    messages: [],
                     rule: method
-                });
-
-                // Break out so as to not spam with validation errors (i.e. required and valid_email)
-                break;
+                };
+                errorObject.messages.push(message);
+                if (!existingError) this.errors.push(errorObject);
             }
         }
     };
@@ -416,7 +470,7 @@
         },
 
         valid_emails: function(field) {
-            var result = field.value.split(",");
+            var result = field.value.split(/\s*,\s*/g);
 
             for (var i = 0, resultLength = result.length; i < resultLength; i++) {
                 if (!emailRegex.test(result[i])) {
@@ -546,7 +600,7 @@
                 len = typeArray.length;
 
             for (i; i < len; i++) {
-                if (ext == typeArray[i]) inArray = true;
+                if (ext.toUpperCase() == typeArray[i].toUpperCase()) inArray = true;
             }
 
             return inArray;
@@ -598,7 +652,6 @@
     };
 
     window.FormValidator = FormValidator;
-
 })(window, document);
 
 /*
